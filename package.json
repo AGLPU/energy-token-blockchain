@@ -3,18 +3,23 @@
   "version": "1.0.0",
   "description": "Smart contracts for Rooftop Solar Energy Marketplace",
   "scripts": {
-    "compile": "hardhat compile",
-    "test": "hardhat test",
-    "node": "hardhat node",
-    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+    "compile": "set NODE_TLS_REJECT_UNAUTHORIZED=0 && hardhat compile",
+    "test": "set NODE_TLS_REJECT_UNAUTHORIZED=0 && hardhat test",
+    "node": "set NODE_TLS_REJECT_UNAUTHORIZED=0 && hardhat node",
+    "deploy:local": "set NODE_TLS_REJECT_UNAUTHORIZED=0 && hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "set NODE_TLS_REJECT_UNAUTHORIZED=0 && hardhat run scripts/deploy.js --network sepolia"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "hardhat": "^2.22.0"
+    "hardhat": "^2.19.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "chai": "^4.3.0",
+    "ethers": "^6.4.0",
+    "fs-extra": "^11.2.0",
+    "dotenv": "^16.0.0"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.0"
   }
 }
-
