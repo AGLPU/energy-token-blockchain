@@ -132,4 +132,3 @@ energy-token-blockchain/artifacts/contracts/EnergyToken.sol/EnergyToken.json
 ```
 
 Make sure the Python `blockchain_service.py` points to this path.
-
