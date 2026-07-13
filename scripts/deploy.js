@@ -60,7 +60,8 @@ async function main() {
   console.log("\n📌 Copy these into your FastAPI .env:");
   console.log(`   BLOCKCHAIN_ENABLED=True`);
   console.log(`   BLOCKCHAIN_CONTRACT_ADDRESS=${contractAddress}`);
-  console.log(`   BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545`);
+  const rpcUrl = hre.network.name === "localhost" ? "http://127.0.0.1:8545" : (process.env.SEPOLIA_RPC_URL || "<your-alchemy-rpc-url>");
+  console.log(`   BLOCKCHAIN_RPC_URL=${rpcUrl}`);
   console.log(`   BLOCKCHAIN_NETWORK=${hre.network.name}`);
   console.log(`   BLOCKCHAIN_PRIVATE_KEY=<deployer private key>\n`);
 }

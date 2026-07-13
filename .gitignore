@@ -1,9 +1,5 @@
 node_modules/
+.env
 artifacts/
 cache/
 deployments/
-.env
-coverage/
-coverage.json
-.idea/
-
