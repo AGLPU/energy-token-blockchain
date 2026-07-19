@@ -22,6 +22,7 @@ contract EnergyToken is ERC20, ERC20Burnable, Ownable {
     event EnergyPurchased(address indexed buyer, address indexed seller, uint256 amountKwh, uint256 priceWei);
     event EnergyConsumed(address indexed consumer, uint256 amountKwh);
     event ListingSnapshotStored(string indexed listingId, bytes32 snapshotHash, uint256 originalEnergyKwh);
+    event PurchaseRecorded(address indexed buyer, address indexed seller, uint256 amountKwh, bytes32 purchaseHash);
 
     // ─── State ───────────────────────────────────────────────────────────────
     mapping(address => uint256) public totalEnergyProduced;   // kWh produced per seller
@@ -54,6 +55,9 @@ contract EnergyToken is ERC20, ERC20Burnable, Ownable {
         bool    verified;
     }
     mapping(string => ListingSnapshot) public listingSnapshots;
+
+    // Purchase data integrity: purchaseId (derived from hash) => SHA256 hash of purchase data
+    mapping(bytes32 => bytes32) public purchaseHashes;  // Purchase record hash storage
 
     // ─── Constructor ─────────────────────────────────────────────────────────
     constructor(address initialOwner)
@@ -125,18 +129,21 @@ contract EnergyToken is ERC20, ERC20Burnable, Ownable {
      * @dev Transfer tokens from seller to buyer after purchase confirmed in DB.
      *      Only the platform (owner) can call this.
      *      Also records the purchase on-chain for energy verification.
-     * @param seller     Seller wallet address
-     * @param buyer      Buyer wallet address
-     * @param amountKwh  Energy purchased in kWh
-     * @param priceWei   Price paid in wei
-     * @param listingId  DB listing UUID — used to track purchase for this listing
+     *      Stores SHA256 hash of purchase data for integrity verification.
+     * @param seller      Seller wallet address
+     * @param buyer       Buyer wallet address
+     * @param amountKwh   Energy purchased in kWh
+     * @param priceWei    Price paid in wei
+     * @param listingId   DB listing UUID — used to track purchase for this listing
+     * @param purchaseHash SHA256 hash of purchase data (buyer_id, energy_kwh, price_eth, listing_id)
      */
     function recordPurchase(
         address seller,
         address buyer,
         uint256 amountKwh,
         uint256 priceWei,
-        string memory listingId
+        string memory listingId,
+        bytes32 purchaseHash
     ) public onlyOwner {
         require(seller != address(0), "Invalid seller address");
         require(buyer != address(0), "Invalid buyer address");
@@ -152,7 +159,27 @@ contract EnergyToken is ERC20, ERC20Burnable, Ownable {
             timestamp: block.timestamp
         }));
 
+        // Store purchase hash for integrity verification
+        // Use keccak256 of (listingId + buyer + amountKwh) as unique key
+        bytes32 purchaseKey = keccak256(abi.encodePacked(listingId, buyer, amountKwh, block.timestamp));
+        purchaseHashes[purchaseKey] = purchaseHash;
+
         emit EnergyPurchased(buyer, seller, amountKwh, priceWei);
+        emit PurchaseRecorded(buyer, seller, amountKwh, purchaseHash);
+    }
+
+    /**
+     * @dev Overloaded recordPurchase for backward compatibility (without hash)
+     *      This version calls the new function with empty hash
+     */
+    function recordPurchase(
+        address seller,
+        address buyer,
+        uint256 amountKwh,
+        uint256 priceWei,
+        string memory listingId
+    ) public onlyOwner {
+        recordPurchase(seller, buyer, amountKwh, priceWei, listingId, bytes32(0));
     }
 
     // ─── Public functions (called by buyers) ─────────────────────────────────
@@ -339,6 +366,41 @@ contract EnergyToken is ERC20, ERC20Burnable, Ownable {
     {
         ListingSnapshot memory snap = listingSnapshots[listingId];
         return (snap.originalEnergyKwh, snap.snapshotHash, snap.createdAt, snap.verified);
+    }
+
+    /**
+     * @dev Verify purchase data integrity by checking stored hash against provided hash.
+     *      Backend calls this to detect if purchase record was tampered with.
+     * @param listingId DB listing UUID
+     * @param buyer Buyer wallet address
+     * @param amountKwh Energy amount in kWh
+     * @param providedHash SHA256 hash provided from DB
+     * @return isValid True if hash matches stored hash, false if tampered
+     * @return storedHash The hash we have on-chain for comparison
+     */
+    function verifyPurchaseIntegrity(
+        string memory listingId,
+        address buyer,
+        uint256 amountKwh,
+        bytes32 providedHash
+    ) public view returns (bool isValid, bytes32 storedHash) {
+        // Find the most recent purchase for this buyer/amount/listing
+        Purchase[] memory purchases = listingPurchases[listingId];
+        
+        for (uint256 i = purchases.length; i > 0; i--) {
+            if (purchases[i-1].buyer == buyer && purchases[i-1].amountKwh == amountKwh) {
+                // Found matching purchase - get its hash
+                bytes32 purchaseKey = keccak256(abi.encodePacked(listingId, buyer, amountKwh, purchases[i-1].timestamp));
+                storedHash = purchaseHashes[purchaseKey];
+                
+                // Check if provided hash matches stored hash
+                isValid = (providedHash == storedHash);
+                return (isValid, storedHash);
+            }
+        }
+        
+        // No matching purchase found
+        return (false, bytes32(0));
     }
 
     // ─── Utility Functions ───────────────────────────────────────────────────
